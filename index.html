@@ -102,7 +102,7 @@ header{padding-top:max(22px,env(safe-area-inset-top))}
 <div class="toast" id="toast"></div>
 <script>
 /* Diagnóstico: muestra en pantalla la versión y cualquier error */
-window.APP_VERSION='v12';
+window.APP_VERSION='v13';
 (function(){
   function bar(msg){var b=document.getElementById('diag');if(!b){b=document.createElement('div');b.id='diag';b.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#b42318;color:#fff;padding:10px 12px;border-radius:10px;font:13px/1.35 system-ui,sans-serif;white-space:pre-wrap';document.body.appendChild(b)}b.textContent=(b.textContent?b.textContent+'\n':'')+'Error: '+msg}
   window.addEventListener('error',function(e){bar((e.message||'')+(e.filename?' ('+e.filename.split('/').pop()+':'+e.lineno+')':''))});
@@ -164,7 +164,7 @@ function ejemplo(){
   return {ajustes:{...AJ},temas,alumnos,sesiones,ejemplo:true};
 }
 
-let editNom=false,tab='alumnos',filtro='todos',detalle=null,lista=null,recup=null,abierto=null,editTit=false;
+let editSub=null,editNom=false,tab='alumnos',filtro='todos',detalle=null,lista=null,recup=null,abierto=null,editTit=false;
 const draft={};let listo=false;
 /* ---------- capa de datos: nube (Firestore) o local ---------- */
 let db={ajustes:{...AJ},temas:[],alumnos:[],sesiones:[]},modo='local',estado='';
@@ -211,6 +211,18 @@ const S={
   renTema(id,nombre){if(ref)return ref.collection('temas').doc(id).update({nombre}).catch(fallo);tema(id).nombre=nombre;saveLocal();render()},
   ordenTemas(ids){if(ref){const b=fs.batch();ids.forEach((id,i)=>b.update(ref.collection('temas').doc(id),{orden:i}));return b.commit().catch(fallo)}
     db.temas=ids.map((id,i)=>Object.assign(tema(id),{orden:i}));saveLocal();render()},
+  /* v13: corregir el nombre de un subtema; también se cambia en las clases y recuperaciones ya guardadas */
+  renSub(tid,k,nuevo){const t=tema(tid),viejo=t.subs[k];if(!t||viejo===undefined||viejo===nuevo)return;
+    const subs=t.subs.map((x,i)=>i===k?nuevo:x),cambia=x=>x===viejo?nuevo:x;
+    const ses=db.sesiones.filter(x=>x.temaId===tid&&(x.sub===viejo||(Array.isArray(x.subs)&&x.subs.includes(viejo))));
+    const als=db.alumnos.filter(a=>(a.recuperados||[]).some(r=>r.temaId===tid&&r.sub===viejo));
+    const fixR=a=>(a.recuperados||[]).map(r=>r.temaId===tid&&r.sub===viejo?{...r,sub:nuevo}:r);
+    if(ref){const b=fs.batch();b.update(ref.collection('temas').doc(tid),{subs});
+      ses.forEach(x=>{const u={};if(x.sub===viejo)u.sub=nuevo;if(Array.isArray(x.subs))u.subs=x.subs.map(cambia);b.update(ref.collection('sesiones').doc(x.id),u)});
+      als.forEach(a=>b.update(ref.collection('alumnos').doc(a.id),{recuperados:fixR(a)}));
+      return b.commit().catch(fallo)}
+    t.subs=subs;ses.forEach(x=>{if(x.sub===viejo)x.sub=nuevo;if(Array.isArray(x.subs))x.subs=x.subs.map(cambia)});
+    als.forEach(a=>a.recuperados=fixR(a));saveLocal();render()},
   delSub(tid,s){if(ref)return ref.collection('temas').doc(tid).update({subs:FV().arrayRemove(s)}).catch(fallo);const t=tema(tid);t.subs=t.subs.filter(x=>x!==s);saveLocal();render()},
   addAlumno(nombre){if(ref)return ref.collection('alumnos').add({nombre,recuperados:[]}).catch(fallo);db.alumnos.push({id:uid(),nombre,recuperados:[]});delete db.ejemplo;saveLocal();render()},
   renAlumno(id,nombre){if(ref)return ref.collection('alumnos').doc(id).update({nombre}).catch(fallo);db.alumnos.find(a=>a.id===id).nombre=nombre;saveLocal();render()},
@@ -404,7 +416,8 @@ function vTemas(){
       <div class="row" style="gap:6px">${mv('primero','⤒ Primero',i===0)}${mv('subir','↑ Subir',i===0)}${mv('bajar','↓ Bajar',i===ult)}${mv('ultimo','⤓ Último',i===ult)}</div>
       <span class="sub" style="font-size:12px;margin-top:6px">Subtemas</span>`:'';
     const subs=open?`<div style="padding:0 14px 14px 54px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)">
-      ${edit}${ts.map((x,k)=>`<div class="row" style="gap:8px"><span style="flex:1;font-size:14px">${(()=>{const q=sesUni(t,x);return q?`<span style="color:#1F6B3A">✓</span> ${esc(x)} <span class="sub" style="font-size:12px;display:inline">· ${fmt(q.fecha)}</span>`:'• '+esc(x)})()}</span><button class="btn ghost sm" style="background:none;color:var(--mute);min-width:44px" data-delsub="${k}" aria-label="Quitar subtema">✕</button></div>`).join('')||'<span class="sub">Sin subtemas todavía.</span>'}
+      ${edit}${ts.map((x,k)=>editSub===k?`<form class="form" id="f-rsub" style="flex-wrap:wrap"><label for="e-sub" class="oculto">Corregir subtema</label><input id="e-sub" value="${esc(x)}" autocomplete="off" style="flex-basis:100%"><button class="btn sm" style="flex:1">Guardar</button><button type="button" class="btn ghost sm" style="flex:1;background:none;color:var(--acc)" data-act="cancelar-sub">Cancelar</button></form>`
+        :`<div class="row" style="gap:4px"><span style="flex:1;font-size:14px">${(()=>{const q=sesUni(t,x);return q?`<span style="color:#1F6B3A">✓</span> ${esc(x)} <span class="sub" style="font-size:12px;display:inline">· ${fmt(q.fecha)}</span>`:'• '+esc(x)})()}</span><button class="btn ghost sm" style="background:none;color:var(--acc);min-width:44px" data-editsub="${k}" aria-label="Corregir subtema">✏️</button><button class="btn ghost sm" style="background:none;color:var(--mute);min-width:44px" data-delsub="${k}" aria-label="Quitar subtema">✕</button></div>`).join('')||'<span class="sub">Sin subtemas todavía.</span>'}
       <form class="form" id="f-sub"><input id="n-sub" placeholder="Nuevo subtema" aria-label="Nuevo subtema" autocomplete="off"><button class="btn sm">Añadir</button></form></div>`:'';
     return `<div class="li" style="${open?'border-bottom:0':''}">${punto}<div class="grow"><span style="font-size:14px;font-weight:500">${i+1} · ${esc(t.nombre)}</span><span class="sub" style="font-size:12px">${estado}</span>${quedoT}</div>
     <button class="btn ghost sm" style="background:none;color:var(--acc);white-space:nowrap" data-abrir="${esc(t.id)}" aria-expanded="${open}" aria-label="Editar tema">✏️ ${ts.length} subtema${ts.length===1?'':'s'} ${open?'▴':'▾'}</button></div>${subs}`}).join('');
@@ -437,7 +450,9 @@ document.addEventListener('click',e=>{
   if(d.act==='cancelar-tit'){editTit=false;clear('i-tit','i-sub');render();return}
   if(d.recuperar){recup=d.recuperar;clear('r-prof');render();const i=document.getElementById('r-prof');if(i)i.focus();return}
   if(d.act==='cancelar'){recup=null;render();return}
-  if(d.abrir){abierto=abierto===d.abrir?null:d.abrir;clear('e-tema');render();return}
+  if(d.abrir){abierto=abierto===d.abrir?null:d.abrir;editSub=null;clear('e-tema','e-sub');render();return}
+  if(d.editsub){editSub=+d.editsub;clear('e-sub');render();const i=document.getElementById('e-sub');if(i){i.focus();i.select()}return}
+  if(d.act==='cancelar-sub'){editSub=null;clear('e-sub');render();return}
   if(d.mover&&abierto){const ids=db.temas.map(t=>t.id),i=ids.indexOf(abierto);if(i<0)return;ids.splice(i,1);
     const j=d.mover==='primero'?0:d.mover==='ultimo'?ids.length:d.mover==='subir'?Math.max(0,i-1):Math.min(ids.length,i+1);
     ids.splice(j,0,abierto);S.ordenTemas(ids);toast('Ahora es el tema '+(j+1));return}
@@ -471,6 +486,9 @@ document.addEventListener('submit',e=>{
     const [rt,rk]=recup.split('|'),r={temaId:rt,fecha:document.getElementById('r-fecha').value,profesor:p};if(+rk>=0)r.sub=tema(rt).subs[+rk];
     S.recup(detalle,r);recup=null;clear('r-prof');render();toast('Tema marcado como recuperado')}
   if(e.target.id==='f-rtema'){const n=v('e-tema');if(!n){toast('Escribe el nombre del tema');return}clear('e-tema');S.renTema(abierto,n);toast('Nombre del tema actualizado');return}
+  if(e.target.id==='f-rsub'){const n=v('e-sub');if(!n){toast('Escribe el subtema');return}const t=tema(abierto),k=editSub;
+    if(t.subs.some((x,i)=>x===n&&i!==k)){toast('Ya hay un subtema con ese nombre');return}
+    editSub=null;clear('e-sub');S.renSub(abierto,k,n);render();toast('Subtema corregido');return}
   if(e.target.id==='f-sub'){const s=v('n-sub');if(!s){toast('Primero escribe el subtema');return}clear('n-sub');S.addSub(abierto,s);render();const i=document.getElementById('n-sub');if(i){i.value='';i.focus()}}
   if(e.target.id==='f-sublista'&&lista){const s=v('n-sublista');if(!s){toast('Escribe la parte que se dio hoy');document.getElementById('n-sublista').focus();return}
     const t=tema(lista.temaId);clear('n-sublista');
