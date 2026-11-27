@@ -91,6 +91,16 @@ header{padding-top:max(22px,env(safe-area-inset-top))}
   <button id="t-temas" data-tab="temas"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2zM4 21V5M9 8h6"/></svg>Temas</button>
 </div></nav>
 <div class="toast" id="toast"></div>
+<script>
+/* Diagnóstico: muestra en pantalla la versión y cualquier error */
+window.APP_VERSION='v6';
+(function(){
+  function bar(msg){var b=document.getElementById('diag');if(!b){b=document.createElement('div');b.id='diag';b.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#b42318;color:#fff;padding:10px 12px;border-radius:10px;font:13px/1.35 system-ui,sans-serif;white-space:pre-wrap';document.body.appendChild(b)}b.textContent=(b.textContent?b.textContent+'\n':'')+'Error: '+msg}
+  window.addEventListener('error',function(e){bar((e.message||'')+(e.filename?' ('+e.filename.split('/').pop()+':'+e.lineno+')':''))});
+  window.addEventListener('unhandledrejection',function(e){var r=e.reason||{};bar((r.code?r.code+' ':'')+(r.message||r))});
+  window.addEventListener('load',function(){setTimeout(function(){if(!window.APP_OK)bar('la app no arrancó (versión '+window.APP_VERSION+')')},8000)});
+})();
+</script>
 <script type="module">
 /* Firebase: misma versión y forma de conexión que la app de Alabanzas */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
@@ -221,7 +231,7 @@ function toast(t){const el=document.getElementById('toast');el.textContent=t;el.
 /* ---------- vistas ---------- */
 function header(){
   const H=document.getElementById('head');
-  const st=`<span class="estado ${modo==='nube'&&estado==='En la nube'?'on':''}">${esc(estado)}</span>`;
+  const st=`<span class="estado ${modo==='nube'&&estado==='En la nube'?'on':''}">${esc(estado)} · ${window.APP_VERSION||""}</span>`;
   if(detalle){
     const a=db.alumnos.find(x=>x.id===detalle);if(!a){detalle=null;return header()}
     const s=stats(a);
@@ -363,7 +373,7 @@ document.addEventListener('submit',e=>{
   if(e.target.id==='f-sub'){const s=v('n-sub');if(!s)return;clear('n-sub');S.addSub(abierto,s);render();const i=document.getElementById('n-sub');if(i){i.value='';i.focus()}}
   if(e.target.id==='f-tema'){const n=v('n-tema');if(!n)return;clear('n-tema');S.addTema(n);render();toast('Tema añadido')}
 });
-listo=true;render();
+listo=true;window.APP_OK=1;render();
 
 /* instalar como app (PWA) */
 if('serviceWorker' in navigator&&location.protocol==='https:'&&!location.hostname.endsWith('claude.ai')){
