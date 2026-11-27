@@ -54,6 +54,11 @@ main{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .dot{width:28px;height:28px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:700}
 .dot.ok{background:#1F6B3A}.dot.no{background:#B4410B}.dot.next{border:2px solid var(--acc)}.dot.later{border:2px solid var(--line)}.dot.half{border:2px solid #1F6B3A;background:linear-gradient(90deg,#1F6B3A 50%,transparent 50%)}
 .li.subli{padding:8px 14px 8px 54px;gap:10px}.dot.sm{width:20px;height:20px;font-size:11px}
+.pick{width:100%;border:0;border-bottom:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;text-align:left;cursor:pointer;min-height:52px}
+.pick.on{background:light-dark(#EEF0FC,#22285a)}
+.box{width:26px;height:26px;border-radius:7px;border:2px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px}
+.pick.on .box{background:var(--acc);border-color:var(--acc)}
+.li.hecho{opacity:.65}.pick:focus-visible{outline:3px solid var(--acc);outline-offset:-3px}
 .btn{min-height:44px;padding:0 16px;border-radius:12px;border:0;background:var(--acc);color:#fff;font:600 15px Inter,sans-serif;cursor:pointer}
 .btn.sm{min-height:36px;padding:0 12px;font-size:13px;background:var(--head)}
 .btn.ghost{background:transparent;color:var(--acc);border:1px solid var(--line)}
@@ -94,7 +99,7 @@ header{padding-top:max(22px,env(safe-area-inset-top))}
 <div class="toast" id="toast"></div>
 <script>
 /* Diagnóstico: muestra en pantalla la versión y cualquier error */
-window.APP_VERSION='v10';
+window.APP_VERSION='v11';
 (function(){
   function bar(msg){var b=document.getElementById('diag');if(!b){b=document.createElement('div');b.id='diag';b.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#b42318;color:#fff;padding:10px 12px;border-radius:10px;font:13px/1.35 system-ui,sans-serif;white-space:pre-wrap';document.body.appendChild(b)}b.textContent=(b.textContent?b.textContent+'\n':'')+'Error: '+msg}
   window.addEventListener('error',function(e){bar((e.message||'')+(e.filename?' ('+e.filename.split('/').pop()+':'+e.lineno+')':''))});
@@ -207,7 +212,9 @@ const S={
   addAlumno(nombre){if(ref)return ref.collection('alumnos').add({nombre,recuperados:[]}).catch(fallo);db.alumnos.push({id:uid(),nombre,recuperados:[]});delete db.ejemplo;saveLocal();render()},
   renAlumno(id,nombre){if(ref)return ref.collection('alumnos').doc(id).update({nombre}).catch(fallo);db.alumnos.find(a=>a.id===id).nombre=nombre;saveLocal();render()},
   delAlumno(id){if(ref)return ref.collection('alumnos').doc(id).delete().catch(fallo);db.alumnos=db.alumnos.filter(a=>a.id!==id);saveLocal();render()},
-  sesion(s){const sub=s.sub??null,id=s.exId||sid(s.temaId,sub);const data={temaId:s.temaId,sub,fecha:s.fecha,profesor:s.profesor,asis:s.asis};
+  sesion(s){const subs=s.subs&&s.subs.length?s.subs:[null],sub=subs[0];
+    const id=s.exId||(subs.length>1?s.temaId+'~m~'+uid():sid(s.temaId,sub));
+    const data={temaId:s.temaId,sub,fecha:s.fecha,profesor:s.profesor,asis:s.asis};if(subs.length>1)data.subs=subs;
     if(ref)return ref.collection('sesiones').doc(id).set(data,{merge:true}).catch(fallo);
     const ex=db.sesiones.find(x=>x.id===id);if(ex){Object.assign(ex,{...data,asis:{...ex.asis,...s.asis}})}else db.sesiones.push({id,...data});saveLocal();render()},
   recup(aid,r){if(ref)return ref.collection('alumnos').doc(aid).update({recuperados:FV().arrayUnion(r)}).catch(fallo);db.alumnos.find(a=>a.id===aid).recuperados.push(r);saveLocal();render()},
@@ -224,9 +231,10 @@ const ini=n=>String(n).split(/\s+/).map(p=>p[0]||'').slice(0,2).join('').toUpper
    Las clases guardadas antes de la v10 (sin subtema) cuentan como la del primer subtema. */
 const unidades=t=>(t.subs&&t.subs.length)?t.subs:[null];
 const subDe=(tid,x)=>{if(x==='*')return '*';if(x)return x;const t=tema(tid);return t&&t.subs&&t.subs.length?t.subs[0]:null};
-const efSub=s=>subDe(s.temaId,s.sub);
-const valida=s=>{const t=tema(s.temaId);if(!t)return false;const e=efSub(s);return e==='*'||unidades(t).includes(e)};
-const sesUni=(t,u)=>{const ss=db.sesiones.filter(s=>s.temaId===t.id&&valida(s));return ss.find(s=>efSub(s)===u)||ss.find(s=>efSub(s)==='*')};
+/* v11: una misma clase puede cubrir varios subtemas (campo subs). Las clases antiguas tienen solo sub. */
+const subsDe=s=>Array.isArray(s.subs)&&s.subs.length?s.subs:[subDe(s.temaId,s.sub)];
+const valida=s=>{const t=tema(s.temaId);if(!t)return false;const us=unidades(t);return subsDe(s).some(e=>e==='*'||us.includes(e))};
+const sesUni=(t,u)=>{const ss=db.sesiones.filter(s=>s.temaId===t.id&&valida(s));return ss.find(s=>subsDe(s).includes(u))||ss.find(s=>subsDe(s).includes('*'))};
 const temaDado=t=>unidades(t).every(u=>sesUni(t,u));
 const temaEmpezado=t=>unidades(t).some(u=>sesUni(t,u));
 const sigSub=t=>{const u=unidades(t).find(u=>!sesUni(t,u));return u===undefined?unidades(t)[0]:u};
@@ -332,23 +340,35 @@ function vDetalle(){
   <button class="btn ghost" data-borrar="${esc(a.id)}">🗑 Quitar alumno (ya no asiste)</button>`;
 }
 
-function cargarLista(){const ex=db.sesiones.find(s=>s.temaId===lista.temaId&&valida(s)&&efSub(s)===subDe(lista.temaId,lista.sub));
-  if(ex){lista.exId=ex.id;lista.fecha=ex.fecha;lista.profesor=ex.profesor||lista.profesor;lista.asis={...ex.asis}}else{lista.exId=null;lista.asis={}}}
+/* Subtemas que aún no se han dado, en su orden */
+const pendSubs=t=>(t.subs||[]).filter(x=>!sesUni(t,x));
+/* Al elegir un tema: si tiene subtemas, se marca el siguiente pendiente; si no, se carga la clase ya dada (para corregirla) */
+function elegirTema(t){lista.temaId=t.id;lista.exId=null;lista.asis={};
+  if((t.subs||[]).length){const p=pendSubs(t);lista.subs=p.length?[p[0]]:[];return}
+  lista.subs=[null];const ex=sesUni(t,null);
+  if(ex){lista.exId=ex.id;lista.fecha=ex.fecha;lista.profesor=ex.profesor||lista.profesor;lista.asis={...ex.asis}}}
 function vLista(){
   if(!db.temas.length)return '<div class="empty">Primero añade los temas en la pestaña Temas.</div>';
   if(!db.alumnos.length)return '<div class="empty">Primero añade alumnos.</div>';
-  if(!lista||!tema(lista.temaId)){const t=db.temas.find(t=>!temaDado(t))||db.temas[0];lista={temaId:t.id,sub:sigSub(t),fecha:hoy(),profesor:'',asis:{}};cargarLista()}
+  if(!lista||!tema(lista.temaId)){const t=db.temas.find(t=>!temaDado(t))||db.temas[0];lista={fecha:hoy(),profesor:''};elegirTema(t)}
   const t=tema(lista.temaId),ts=t.subs||[];
-  if(ts.length&&lista.sub!=='*'&&!ts.includes(lista.sub)){lista.sub=sigSub(t);cargarLista()}
-  if(!ts.length&&lista.sub){lista.sub=null;cargarLista()}
+  if(ts.length){if((lista.subs||[]).includes(null))elegirTema(t);
+    lista.subs=(lista.subs||[]).filter(x=>ts.includes(x)&&!sesUni(t,x))}   // nunca se vuelve a marcar uno ya dado
+  else if(!(lista.subs&&lista.subs.length===1&&lista.subs[0]===null))elegirTema(t);
   db.alumnos.forEach(a=>{if(!(a.id in lista.asis))lista.asis[a.id]=true});
   const opts=db.temas.map((x,i)=>`<option value="${esc(x.id)}" ${x.id===lista.temaId?'selected':''}>${i+1} · ${esc(x.nombre)}${temaDado(x)?' (ya dado)':temaEmpezado(x)?' (en curso)':''}</option>`).join('');
-  const sopts=ts.map((x,k)=>`<option value="${k}" ${x===lista.sub?'selected':''}>${k+1}. ${esc(x)}${sesUni(t,x)?' (ya dado)':''}</option>`).join('')+`<option value="*" ${lista.sub==='*'?'selected':''}>Todo el tema en una sola clase</option>`;
+  const pend=pendSubs(t),todos=pend.length>1&&pend.every(x=>lista.subs.includes(x));
+  const sopts=ts.map((x,k)=>{const q=sesUni(t,x);
+    if(q)return `<div class="li hecho"><div class="dot sm ok">✓</div><div class="grow"><span style="font-size:14px">${esc(x)}</span><span class="sub" style="font-size:12px">Ya dado · ${porQuien(q.fecha,q.profesor)}</span></div></div>`;
+    const on=lista.subs.includes(x);
+    return `<button class="li pick ${on?'on':''}" data-pick="${k}" aria-pressed="${on}"><span class="box">${on?'✓':''}</span><span class="grow" style="font-size:14px;font-weight:${on?600:500}">${esc(x)}</span></button>`}).join('');
+  const subsHtml=!ts.length?'':`<div class="row" style="justify-content:space-between"><span class="sub">Subtemas de hoy · toca los que se dan</span>${pend.length>1?`<button class="btn ghost sm" style="background:none;color:var(--acc)" data-act="todos-subs">${todos?'Quitar todos':'Marcar todos'}</button>`:''}</div>
+  <div class="list">${sopts}</div>${pend.length?'':'<div class="alert" style="background:var(--okbg);color:var(--ok)">Todos los subtemas de este tema ya se dieron. Elige otro tema.</div>'}`;
   const pres=db.alumnos.filter(a=>lista.asis[a.id]).length;
   const rows=db.alumnos.map(a=>`<div class="li"><div class="av">${esc(ini(a.nombre))}</div><div class="grow"><span class="name">${esc(a.nombre)}</span></div>
   <div class="toggle"><button class="p ${lista.asis[a.id]?'on':''}" data-marca="${esc(a.id)}" data-v="1" aria-label="Presente">P</button><button class="f ${lista.asis[a.id]?'':'on'}" data-marca="${esc(a.id)}" data-v="0" aria-label="Falta">F</button></div></div>`).join('');
   return `<label for="s-tema" class="sub">Tema</label><select id="s-tema">${opts}</select>
-  ${ts.length?`<label for="s-sub" class="sub">Subtema de hoy</label><select id="s-sub">${sopts}</select>`:''}
+  ${subsHtml}
   <label for="s-prof" class="sub">Hermano o hermana que da la clase</label><input id="s-prof" list="dl-prof2" placeholder="Ej. Hno. Luis" value="${esc(lista.profesor)}" autocomplete="off">
   <datalist id="dl-prof2">${profesores().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
   <label for="s-fecha" class="sub">Fecha</label><input type="date" id="s-fecha" value="${esc(lista.fecha)}">
@@ -410,16 +430,21 @@ document.addEventListener('click',e=>{
   if(d.act==='base'){S.temasBase();toast('Temas cargados');return}
   if(d.borrar){if(b.dataset.ok){S.delAlumno(d.borrar);detalle=null;render();toast('Alumno quitado')}else{b.dataset.ok=1;b.textContent='Toca otra vez para confirmar'}return}
   if(d.marca){lista.asis[d.marca]=d.v==='1';render();return}
+  if(d.pick){const ts=tema(lista.temaId).subs,x=ts[+d.pick];
+    const sel=lista.subs.includes(x)?lista.subs.filter(y=>y!==x):[...lista.subs,x];
+    lista.subs=ts.filter(y=>sel.includes(y));render();return}
+  if(d.act==='todos-subs'){const p=pendSubs(tema(lista.temaId));lista.subs=p.every(x=>lista.subs.includes(x))?[]:p;render();return}
   if(d.act==='guardar'){
+    const ns=(tema(lista.temaId).subs||[]).length?lista.subs.length:0;
+    if((tema(lista.temaId).subs||[]).length&&!ns){toast('Toca al menos un subtema de hoy');return}
     lista.profesor=document.getElementById('s-prof').value.trim();
     if(!lista.profesor){toast('Escribe quién da la clase');document.getElementById('s-prof').focus();return}
     lista.fecha=document.getElementById('s-fecha').value||hoy();
-    S.sesion(lista);lista=null;clear('s-prof','s-fecha');tab='alumnos';render();toast('Asistencia guardada');return}
+    S.sesion(lista);lista=null;clear('s-prof','s-fecha');tab='alumnos';render();toast('Asistencia guardada'+(ns>1?' · '+ns+' subtemas':''));return}
   if(d.act==='limpiar'){if(b.dataset.ok){S.limpiar();toast('Listo, empieza añadiendo alumnos')}else{b.dataset.ok=1;b.textContent='¿Seguro? Toca otra vez'}return}
 });
 document.addEventListener('change',e=>{
-  if(e.target.id==='s-tema'){lista.temaId=e.target.value;lista.sub=sigSub(tema(lista.temaId));cargarLista();clear('s-prof','s-fecha');render()}
-  if(e.target.id==='s-sub'){const v=e.target.value;lista.sub=v==='*'?'*':tema(lista.temaId).subs[+v];cargarLista();clear('s-prof','s-fecha');render()}
+  if(e.target.id==='s-tema'){elegirTema(tema(e.target.value));clear('s-prof','s-fecha');render()}
   if(e.target.id==='s-fecha')lista.fecha=e.target.value;
 });
 document.addEventListener('submit',e=>{
