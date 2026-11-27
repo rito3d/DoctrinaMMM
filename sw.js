@@ -1,4 +1,5 @@
 // Guarda la app en el celular para que abra rápido y sin internet.
+// Los archivos propios se piden siempre frescos (no-cache) para que las versiones nuevas lleguen al momento.
 const CACHE='discipulado-v13';
 const BASE=['./','index.html','manifest.json','icon-192.png','icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(BASE)));self.skipWaiting()});
@@ -8,5 +9,5 @@ self.addEventListener('fetch',e=>{
   if(e.request.method!=='GET')return;
   const propio=u.origin===location.origin, libs=u.hostname==='www.gstatic.com'||u.hostname.endsWith('fonts.googleapis.com')||u.hostname.endsWith('fonts.gstatic.com');
   if(!propio&&!libs)return; // los datos de Firebase no pasan por aquí
-  e.respondWith(fetch(e.request).then(r=>{const copia=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copia));return r}).catch(()=>caches.match(e.request).then(r=>r||caches.match('index.html'))));
+  e.respondWith(fetch(e.request,propio?{cache:'no-cache'}:{}).then(r=>{const copia=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copia));return r}).catch(()=>caches.match(e.request).then(r=>r||caches.match('index.html'))));
 });
