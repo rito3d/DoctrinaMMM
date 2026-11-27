@@ -11,9 +11,6 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Discipulado">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 <style>
@@ -94,7 +91,23 @@ header{padding-top:max(22px,env(safe-area-inset-top))}
   <button id="t-temas" data-tab="temas"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2zM4 21V5M9 8h6"/></svg>Temas</button>
 </div></nav>
 <div class="toast" id="toast"></div>
-<script>
+<script type="module">
+/* Firebase: misma versión y forma de conexión que la app de Alabanzas */
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, query, orderBy, addDoc, updateDoc, setDoc, deleteDoc, writeBatch, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+let fbApp=null,fbDb=null,fbAuth=null;
+const wDoc=d=>({_d:d,collection:n=>wCol(collection(d,n)),onSnapshot:(a,b)=>onSnapshot(d,a,b),set:(x,o)=>setDoc(d,x,o||{}),update:x=>updateDoc(d,x),delete:()=>deleteDoc(d)});
+const wCol=(c,q)=>({orderBy:f=>wCol(c,query(c,orderBy(f))),onSnapshot:(a,b)=>onSnapshot(q||c,a,b),doc:id=>wDoc(id?doc(c,id):doc(c)),add:x=>addDoc(c,x)});
+const firebase={
+  initializeApp:cfg=>{fbApp=initializeApp(cfg)},
+  firestore:Object.assign(()=>{
+    if(!fbDb)fbDb=initializeFirestore(fbApp,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})});
+    return {settings(){},enablePersistence:async()=>{},collection:n=>wCol(collection(fbDb,n)),
+      batch:()=>{const b=writeBatch(fbDb);return {set:(r,x)=>b.set(r._d,x),commit:()=>b.commit()}}};
+  },{FieldValue:{arrayUnion,arrayRemove}}),
+  auth:()=>{if(!fbAuth)fbAuth=getAuth(fbApp);return {onAuthStateChanged:f=>onAuthStateChanged(fbAuth,f),signInAnonymously:()=>signInAnonymously(fbAuth)}}
+};
 {
 /* ====== CONFIGURACIÓN DE FIREBASE ======
    Pega aquí los datos de tu proyecto (Firebase › Configuración del proyecto › Tus apps › Web).
@@ -137,13 +150,12 @@ const draft={};let listo=false;
 /* ---------- capa de datos: nube (Firestore) o local ---------- */
 let db={ajustes:{...AJ},temas:[],alumnos:[],sesiones:[]},modo='local',estado='';
 let fs=null,ref=null;
-const nube=!!(firebaseConfig.projectId&&window.firebase);
+const nube=!!firebaseConfig.projectId;
 if(nube){
   try{
     firebase.initializeApp(firebaseConfig);
     fs=firebase.firestore();
-    try{fs.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
-    try{fs.enablePersistence({synchronizeTabs:true}).catch(()=>{})}catch(e){}
+        try{fs.enablePersistence({synchronizeTabs:true}).catch(()=>{})}catch(e){}
     ref=fs.collection('doctrina').doc(CURSO);
     modo='nube';estado='Conectando…';
     let conectado=false;
