@@ -98,12 +98,6 @@ header{padding-top:max(22px,env(safe-area-inset-top))}
 /* ====== CONFIGURACIÓN DE FIREBASE ======
    Pega aquí los datos de tu proyecto (Firebase › Configuración del proyecto › Tus apps › Web).
    Si lo dejas vacío, la app funciona en modo local (solo en este celular). */
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBBadBw9ISyXhrArD9D5Kua1AZtKvHgT4c",
   authDomain: "antioquia-9b5a7.firebaseapp.com",
@@ -113,8 +107,6 @@ const firebaseConfig = {
   appId: "1:215703881297:web:932bcc23831f1ffd1ada70"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
 const CURSO = 'discipulado-2026';   // un nombre distinto crea otro curso aparte
 /* ====================================== */
 
