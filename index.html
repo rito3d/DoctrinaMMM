@@ -93,7 +93,7 @@ header{padding-top:max(22px,env(safe-area-inset-top))}
 <div class="toast" id="toast"></div>
 <script>
 /* Diagnóstico: muestra en pantalla la versión y cualquier error */
-window.APP_VERSION='v7';
+window.APP_VERSION='v8';
 (function(){
   function bar(msg){var b=document.getElementById('diag');if(!b){b=document.createElement('div');b.id='diag';b.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#b42318;color:#fff;padding:10px 12px;border-radius:10px;font:13px/1.35 system-ui,sans-serif;white-space:pre-wrap';document.body.appendChild(b)}b.textContent=(b.textContent?b.textContent+'\n':'')+'Error: '+msg}
   window.addEventListener('error',function(e){bar((e.message||'')+(e.filename?' ('+e.filename.split('/').pop()+':'+e.lineno+')':''))});
@@ -155,7 +155,7 @@ function ejemplo(){
   return {ajustes:{...AJ},temas,alumnos,sesiones,ejemplo:true};
 }
 
-let tab='alumnos',filtro='todos',detalle=null,lista=null,recup=null,abierto=null,editTit=false;
+let editNom=false,tab='alumnos',filtro='todos',detalle=null,lista=null,recup=null,abierto=null,editTit=false;
 const draft={};let listo=false;
 /* ---------- capa de datos: nube (Firestore) o local ---------- */
 let db={ajustes:{...AJ},temas:[],alumnos:[],sesiones:[]},modo='local',estado='';
@@ -201,6 +201,7 @@ const S={
   addSub(tid,s){if(ref)return ref.collection('temas').doc(tid).update({subs:FV().arrayUnion(s)}).catch(fallo);const t=tema(tid);if(!t.subs.includes(s))t.subs.push(s);saveLocal();render()},
   delSub(tid,s){if(ref)return ref.collection('temas').doc(tid).update({subs:FV().arrayRemove(s)}).catch(fallo);const t=tema(tid);t.subs=t.subs.filter(x=>x!==s);saveLocal();render()},
   addAlumno(nombre){if(ref)return ref.collection('alumnos').add({nombre,recuperados:[]}).catch(fallo);db.alumnos.push({id:uid(),nombre,recuperados:[]});delete db.ejemplo;saveLocal();render()},
+  renAlumno(id,nombre){if(ref)return ref.collection('alumnos').doc(id).update({nombre}).catch(fallo);db.alumnos.find(a=>a.id===id).nombre=nombre;saveLocal();render()},
   delAlumno(id){if(ref)return ref.collection('alumnos').doc(id).delete().catch(fallo);db.alumnos=db.alumnos.filter(a=>a.id!==id);saveLocal();render()},
   sesion(s){const data={temaId:s.temaId,fecha:s.fecha,profesor:s.profesor,asis:s.asis};
     if(ref)return ref.collection('sesiones').doc(s.temaId).set(data,{merge:true}).catch(fallo);
@@ -287,7 +288,10 @@ function vDetalle(){
   const alerta=s.pend.length?`<div class="alert"><b>Tiene ${s.pend.length} tema${s.pend.length>1?'s':''} por recuperar</b>${s.pend.map(id=>'Tema '+nTema(id)+' · '+esc(tema(id).nombre)).join('<br>')}</div>`:'';
   return `${alerta}<div class="row" style="justify-content:space-between"><h2>Temas del curso</h2><span class="num">${s.comp} de ${db.temas.length}</span></div>
   <div class="bar" style="flex:none"><i style="width:${s.comp/(db.temas.length||1)*100}%"></i></div><div class="list">${items}</div>
-  <button class="btn ghost" data-borrar="${esc(a.id)}">Quitar alumno</button>`;
+  <h2 style="margin-top:8px">Datos del alumno</h2>
+  ${editNom?`<form class="form" id="f-nombre"><label for="e-nombre" class="oculto">Nombre corregido</label><input id="e-nombre" value="${esc(a.nombre)}" autocomplete="off"><button class="btn">Guardar</button></form><button class="btn ghost" data-act="cancelar-nom">Cancelar</button>`
+  :`<button class="btn ghost" data-act="editar-nom">✏️ Corregir nombre</button>`}
+  <button class="btn ghost" data-borrar="${esc(a.id)}">🗑 Quitar alumno (ya no asiste)</button>`;
 }
 
 function vLista(){
@@ -340,8 +344,10 @@ document.addEventListener('click',e=>{
   const d=b.dataset;
   if(d.tab){tab=d.tab;detalle=null;recup=null;render();scrollTo(0,0);return}
   if(d.filtro){filtro=d.filtro;render();return}
-  if(d.alumno){detalle=d.alumno;render();scrollTo(0,0);return}
-  if(d.act==='volver'){detalle=null;recup=null;render();return}
+  if(d.act==='editar-nom'){editNom=true;clear('e-nombre');render();const i=document.getElementById('e-nombre');if(i){i.focus();i.select()}return}
+  if(d.act==='cancelar-nom'){editNom=false;clear('e-nombre');render();return}
+  if(d.alumno){editNom=false;clear('e-nombre');detalle=d.alumno;render();scrollTo(0,0);return}
+  if(d.act==='volver'){editNom=false;detalle=null;recup=null;render();return}
   if(d.act==='editar-tit'){editTit=true;clear('i-tit','i-sub');render();document.getElementById('i-tit').focus();return}
   if(d.act==='cancelar-tit'){editTit=false;clear('i-tit','i-sub');render();return}
   if(d.recuperar){recup=d.recuperar;clear('r-prof');render();const i=document.getElementById('r-prof');if(i)i.focus();return}
@@ -367,6 +373,7 @@ document.addEventListener('change',e=>{
 document.addEventListener('submit',e=>{
   e.preventDefault();const v=id=>document.getElementById(id).value.trim();
   if(e.target.id==='f-tit'){const t=v('i-tit'),s=v('i-sub');if(!t)return;editTit=false;clear('i-tit','i-sub');S.ajustes({titulo:t,subtitulo:s});render();toast('Nombre del curso actualizado')}
+  if(e.target.id==='f-nombre'){const n=v('e-nombre');if(!n){toast('Escribe el nombre');return}editNom=false;clear('e-nombre');S.renAlumno(detalle,n);render();toast('Nombre corregido');return}
   if(e.target.id==='f-alumno'){const n=v('n-alumno');if(!n){toast('Primero escribe el nombre del alumno');document.getElementById('n-alumno').focus();return}clear('n-alumno');S.addAlumno(n);render();toast('Alumno añadido')}
   if(e.target.id==='f-recup'){const p=v('r-prof');if(!p){toast('Escribe quién dio la clase');return}
     S.recup(detalle,{temaId:recup,fecha:document.getElementById('r-fecha').value,profesor:p});recup=null;clear('r-prof');render();toast('Tema marcado como recuperado')}
