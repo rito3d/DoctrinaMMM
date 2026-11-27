@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Curso de Discipulado</title>
+<meta name="theme-color" content="#1E2A5A">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Discipulado">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calma, práctica, de iglesia — una herramienta de maestro
+   IDEA: la libreta de asistencia del maestro, hecha app
+   PICTURE: la lista misma de alumnos con sus barras de avance
+   COLOUR and TYPE: azul tinta + índigo, naranja solo para faltas; Space Grotesk + Inter
+   LAYOUT: una columna de móvil (máx 520px), cabecera con cifras, pestañas abajo */
+:root{color-scheme:light dark;
+--bg:light-dark(#F4F3EF,#12141c);--card:light-dark(#fff,#1c2030);--ink:light-dark(#1B1F2A,#eef0f6);
+--mute:light-dark(#5E6372,#a7acbb);--line:light-dark(#E7E4DC,#2a2f42);--head:light-dark(#1E2A5A,#1a2350);
+--head2:light-dark(#2F3D75,#27326a);--acc:light-dark(#3B4CCA,#8c99ff);--ok:light-dark(#1F6B3A,#6fd393);
+--okbg:light-dark(#DDF1E3,#173a25);--bad:light-dark(#8A3A0B,#ffb98a);--badbg:light-dark(#FCE9DC,#3d2414);--track:light-dark(#ECEAE4,#2a2f42)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 Inter,system-ui,sans-serif;overflow-x:clip}
+.app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:76px}
+header{background:var(--head);color:#fff;padding:22px 18px 18px;display:flex;flex-direction:column;gap:14px}
+header small{color:#C9D1F0;font-size:13px}
+h1{margin:0;font:700 26px/1.1 'Space Grotesk',sans-serif}
+h2{margin:0;font-size:17px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.stat{background:var(--head2);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font-size:22px}.stat span{font-size:12px;color:#C9D1F0}
+main{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:500 13px Inter,sans-serif;cursor:pointer}
+.chip.on{background:var(--head);border-color:var(--head);color:#fff;font-weight:600}
+.card{background:var(--card);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 1px 2px rgba(20,20,40,.06);border:0;color:inherit;font:inherit;text-align:left;width:100%;cursor:pointer}
+.row{display:flex;align-items:center;gap:12px}
+.av{width:40px;height:40px;border-radius:20px;background:light-dark(#E3E7F7,#2b3566);color:light-dark(#1E2A5A,#dfe3ff);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
+.grow{flex:1;display:flex;flex-direction:column;gap:2px}
+.name{font-weight:600;font-size:15px}.sub{font-size:13px;color:var(--mute)}.sub.ok{color:var(--ok)}
+.tag{font-size:12px;font-weight:600;padding:4px 8px;border-radius:8px;white-space:nowrap;background:var(--badbg);color:var(--bad)}
+.tag.ok{background:var(--okbg);color:var(--ok)}.tag.hot{background:#B4410B;color:#fff}
+.bar{flex:1;height:8px;border-radius:4px;background:var(--track);overflow:hidden}.bar i{display:block;height:100%;background:var(--acc);border-radius:4px}
+.num{font-size:12px;color:var(--mute);white-space:nowrap}
+.list{background:var(--card);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(20,20,40,.06)}
+.li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}.li:last-child{border:0}
+.li.pend{background:light-dark(#FFF7F1,#2a1d14)}
+.dot{width:28px;height:28px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:700}
+.dot.ok{background:#1F6B3A}.dot.no{background:#B4410B}.dot.next{border:2px solid var(--acc)}.dot.later{border:2px solid var(--line)}
+.btn{min-height:44px;padding:0 16px;border-radius:12px;border:0;background:var(--acc);color:#fff;font:600 15px Inter,sans-serif;cursor:pointer}
+.btn.sm{min-height:36px;padding:0 12px;font-size:13px;background:var(--head)}
+.btn.ghost{background:transparent;color:var(--acc);border:1px solid var(--line)}
+.btn:focus-visible,.chip:focus-visible,.card:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.back{width:44px;height:44px;border-radius:12px;background:var(--head2);border:0;color:#fff;font-size:22px;cursor:pointer}
+.alert{background:var(--badbg);color:var(--bad);border-radius:14px;padding:12px 14px;font-size:14px}
+.alert b{display:block}
+input,select{width:100%;height:46px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:16px Inter,sans-serif;padding:0 12px}
+.form{display:flex;gap:8px}.form input{flex:1}
+.toggle{display:flex;gap:6px}.toggle button{min-width:44px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:600 14px Inter,sans-serif;cursor:pointer}
+.toggle .p.on{background:#1F6B3A;border-color:#1F6B3A;color:#fff}.toggle .f.on{background:#B4410B;border-color:#B4410B;color:#fff}
+nav{position:fixed;bottom:0;left:0;right:0;height:calc(68px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center}
+nav div{max-width:520px;width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+nav button{border:0;background:none;color:var(--mute);font:500 12px Inter,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer}
+nav button.on{color:var(--acc);font-weight:700}
+nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.empty{text-align:center;color:var(--mute);padding:28px 10px;font-size:14px}
+.note{font-size:12px;color:var(--mute);text-align:center}
+.estado{font-size:12px;color:#C9D1F0;display:flex;align-items:center;gap:6px}.estado::before{content:"";width:8px;height:8px;border-radius:4px;background:#9aa3c7}.estado.on::before{background:#5fd38a}
+.edit-tit{display:flex;flex-direction:column;gap:8px}.edit-tit label{font-size:13px;color:#C9D1F0}
+.oculto{position:absolute;left:-9999px}
+header{padding-top:max(22px,env(safe-area-inset-top))}
+.toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--head);color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header id="head"></header>
+  <main id="main"></main>
+</div>
+<nav><div>
+  <button id="t-alumnos" data-tab="alumnos"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 4.5a3.5 3.5 0 010 7M21 20c0-2.6-1.6-4.8-4-5.6"/></svg>Alumnos</button>
+  <button id="t-lista" data-tab="lista"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9 15l2 2 4-4"/></svg>Pasar lista</button>
+  <button id="t-temas" data-tab="temas"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2zM4 21V5M9 8h6"/></svg>Temas</button>
+</div></nav>
+<div class="toast" id="toast"></div>
+<script>
+{
+/* ====== CONFIGURACIÓN DE FIREBASE ======
+   Pega aquí los datos de tu proyecto (Firebase › Configuración del proyecto › Tus apps › Web).
+   Si lo dejas vacío, la app funciona en modo local (solo en este celular). */
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBBadBw9ISyXhrArD9D5Kua1AZtKvHgT4c",
+  authDomain: "antioquia-9b5a7.firebaseapp.com",
+  projectId: "antioquia-9b5a7",
+  storageBucket: "antioquia-9b5a7.firebasestorage.app",
+  messagingSenderId: "215703881297",
+  appId: "1:215703881297:web:932bcc23831f1ffd1ada70"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const CURSO = 'discipulado-2026';   // un nombre distinto crea otro curso aparte
+/* ====================================== */
+
+const KEY='doctrina-asistencia-v2';
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const hoy=()=>new Date().toISOString().slice(0,10);
+const fmt=d=>{if(!d)return'';const [y,m,dd]=d.split('-');return `${+dd} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][m-1]}`};
+const AJ={titulo:'Curso de Discipulado',subtitulo:'Doctrina Bíblica 2026'};
+const TEMAS_BASE=['La Biblia, Palabra de Dios','Dios y la Trinidad','Jesucristo','El Espíritu Santo','El pecado y la salvación','La Gracia','La fe y el arrepentimiento','El bautismo','La Iglesia','La oración','El servicio','La segunda venida'];
+
+function ejemplo(){
+  const temas=TEMAS_BASE.map((n,i)=>({id:uid(),nombre:n,subs:[],orden:i}));
+  temas[0].subs=['¿Qué es la Biblia?','Antiguo y Nuevo Testamento','La inspiración divina','Cómo leer y estudiar la Biblia'];
+  temas[1].subs=['Los atributos de Dios','El Padre, el Hijo y el Espíritu Santo'];
+  const alumnos=['María Rojas','José Pérez','Ana López','David Castro','Ruth Sánchez'].map(n=>({id:uid(),nombre:n,recuperados:[]}));
+  const faltas=[[5],[],[2,4,5],[3],[]];
+  const fechas=['2026-10-03','2026-10-10','2026-10-17','2026-10-24','2026-11-07','2026-11-14','2026-11-21'];
+  const profes=['Hno. Luis','Hna. Carmen','Hno. Luis','Hna. Rebeca','Hna. Carmen','Hno. Luis','Hna. Rebeca'];
+  const sesiones=fechas.map((f,i)=>({id:temas[i].id,temaId:temas[i].id,fecha:f,profesor:profes[i],asis:Object.fromEntries(alumnos.map((a,j)=>[a.id,!faltas[j].includes(i)]))}));
+  alumnos[3].recuperados=[{temaId:temas[3].id,fecha:'2026-10-31',profesor:'Hna. Carmen'}];
+  return {ajustes:{...AJ},temas,alumnos,sesiones,ejemplo:true};
+}
+
+let tab='alumnos',filtro='todos',detalle=null,lista=null,recup=null,abierto=null,editTit=false;
+const draft={};let listo=false;
+/* ---------- capa de datos: nube (Firestore) o local ---------- */
+let db={ajustes:{...AJ},temas:[],alumnos:[],sesiones:[]},modo='local',estado='';
+let fs=null,ref=null;
+const nube=!!(firebaseConfig.projectId&&window.firebase);
+if(nube){
+  try{
+    firebase.initializeApp(firebaseConfig);
+    fs=firebase.firestore();
+    try{fs.enablePersistence({synchronizeTabs:true}).catch(()=>{})}catch(e){}
+    ref=fs.collection('doctrina').doc(CURSO);
+    modo='nube';estado='Conectando…';
+    const ok=()=>{estado=navigator.onLine?'En la nube':'Sin internet · se sincroniza al volver'};
+    const err=e=>{estado='Error de conexión: '+(e.code||e.message);render()};
+    ref.onSnapshot(d=>{db.ajustes={...AJ,...(d.data()||{})};ok();render()},err);
+    ref.collection('temas').orderBy('orden').onSnapshot(q=>{db.temas=q.docs.map(d=>({subs:[],...d.data(),id:d.id}));ok();render()},err);
+    ref.collection('alumnos').orderBy('nombre').onSnapshot(q=>{db.alumnos=q.docs.map(d=>({recuperados:[],...d.data(),id:d.id}));ok();render()},err);
+    ref.collection('sesiones').onSnapshot(q=>{db.sesiones=q.docs.map(d=>({asis:{},...d.data(),id:d.id}));ok();render()},err);
+    addEventListener('online',()=>{ok();render()});addEventListener('offline',()=>{ok();render()});
+  }catch(e){modo='local';console.error(e)}
+}
+if(modo==='local'){
+  try{db=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+  if(!db||!db.temas)db=ejemplo();
+  db.ajustes={...AJ,...(db.ajustes||{})};
+  estado='Modo local · solo en este equipo';
+}
+const saveLocal=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}};
+const fallo=e=>toast('No se pudo guardar: '+(e.code||e.message));
+const FV=()=>firebase.firestore.FieldValue;
+
+const S={
+  ajustes(a){if(ref)return ref.set(a,{merge:true}).catch(fallo);db.ajustes={...db.ajustes,...a};saveLocal();render()},
+  addTema(nombre){const orden=Date.now();if(ref)return ref.collection('temas').add({nombre,subs:[],orden}).catch(fallo);db.temas.push({id:uid(),nombre,subs:[],orden});saveLocal();render()},
+  addSub(tid,s){if(ref)return ref.collection('temas').doc(tid).update({subs:FV().arrayUnion(s)}).catch(fallo);const t=tema(tid);if(!t.subs.includes(s))t.subs.push(s);saveLocal();render()},
+  delSub(tid,s){if(ref)return ref.collection('temas').doc(tid).update({subs:FV().arrayRemove(s)}).catch(fallo);const t=tema(tid);t.subs=t.subs.filter(x=>x!==s);saveLocal();render()},
+  addAlumno(nombre){if(ref)return ref.collection('alumnos').add({nombre,recuperados:[]}).catch(fallo);db.alumnos.push({id:uid(),nombre,recuperados:[]});delete db.ejemplo;saveLocal();render()},
+  delAlumno(id){if(ref)return ref.collection('alumnos').doc(id).delete().catch(fallo);db.alumnos=db.alumnos.filter(a=>a.id!==id);saveLocal();render()},
+  sesion(s){const data={temaId:s.temaId,fecha:s.fecha,profesor:s.profesor,asis:s.asis};
+    if(ref)return ref.collection('sesiones').doc(s.temaId).set(data,{merge:true}).catch(fallo);
+    const ex=db.sesiones.find(x=>x.temaId===s.temaId);if(ex){Object.assign(ex,{...data,asis:{...ex.asis,...s.asis}})}else db.sesiones.push({id:s.temaId,...data});saveLocal();render()},
+  recup(aid,r){if(ref)return ref.collection('alumnos').doc(aid).update({recuperados:FV().arrayUnion(r)}).catch(fallo);db.alumnos.find(a=>a.id===aid).recuperados.push(r);saveLocal();render()},
+  temasBase(){if(ref){const b=fs.batch();TEMAS_BASE.forEach((n,i)=>b.set(ref.collection('temas').doc(),{nombre:n,subs:[],orden:i}));return b.commit().catch(fallo)}
+    TEMAS_BASE.forEach((n,i)=>db.temas.push({id:uid(),nombre:n,subs:[],orden:i}));saveLocal();render()},
+  limpiar(){db={ajustes:db.ajustes,temas:db.temas,alumnos:[],sesiones:[]};saveLocal();render()}
+};
+
+/* ---------- cálculos ---------- */
+const tema=id=>db.temas.find(t=>t.id===id);
+const nTema=id=>db.temas.indexOf(tema(id))+1;
+const ini=n=>String(n).split(/\s+/).map(p=>p[0]||'').slice(0,2).join('').toUpperCase();
+const dados=()=>db.sesiones.filter(s=>tema(s.temaId)).length;
+const profesores=()=>[...new Set([...db.sesiones.map(s=>s.profesor),...db.alumnos.flatMap(a=>a.recuperados||[]).map(r=>r.profesor)].filter(Boolean))];
+const porQuien=(f,p)=>[fmt(f),p?'Prof. '+esc(p):''].filter(Boolean).join(' · ');
+function stats(a){
+  const ses=db.sesiones.filter(s=>tema(s.temaId)&&a.id in (s.asis||{}));
+  const pres=ses.filter(s=>s.asis[a.id]).length;
+  const rec=(a.recuperados||[]).map(r=>r.temaId);
+  const pend=ses.filter(s=>!s.asis[a.id]&&!rec.includes(s.temaId)).map(s=>s.temaId);
+  const comp=new Set([...ses.filter(s=>s.asis[a.id]).map(s=>s.temaId),...rec.filter(tema)]);
+  return {total:ses.length,pres,faltas:ses.length-pres,pct:ses.length?Math.round(pres/ses.length*100):0,pend,comp:comp.size};
+}
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(()=>el.classList.remove('show'),2200)}
+
+/* ---------- vistas ---------- */
+function header(){
+  const H=document.getElementById('head');
+  const st=`<span class="estado ${modo==='nube'&&estado==='En la nube'?'on':''}">${esc(estado)}</span>`;
+  if(detalle){
+    const a=db.alumnos.find(x=>x.id===detalle);if(!a){detalle=null;return header()}
+    const s=stats(a);
+    H.innerHTML=`<button class="back" data-act="volver" aria-label="Volver">‹</button>
+    <div class="row"><div class="av" style="width:56px;height:56px;border-radius:28px;font-size:18px">${esc(ini(a.nombre))}</div>
+    <div class="grow"><h1 style="font-size:24px">${esc(a.nombre)}</h1><small>${s.comp} de ${db.temas.length} temas completados</small></div></div>
+    <div class="stats"><div class="stat"><b>${s.pct}%</b><span>Asistencia</span></div><div class="stat"><b>${s.pres}</b><span>Presentes</span></div><div class="stat"><b style="color:#FFB98A">${s.faltas}</b><span>Faltas</span></div></div>`;
+    return;
+  }
+  const al=db.alumnos.map(stats).filter(s=>s.total);
+  const prom=al.length?Math.round(al.reduce((t,s)=>t+s.pct,0)/al.length):0;
+  const tit=editTit?`<form id="f-tit" class="edit-tit"><label for="i-tit">Nombre del curso</label><input id="i-tit" value="${esc(db.ajustes.titulo)}"><label for="i-sub">Debajo</label><input id="i-sub" value="${esc(db.ajustes.subtitulo)}"><div class="row"><button class="btn" style="flex:1">Guardar</button><button type="button" class="btn ghost" style="color:#fff;border-color:#4a5894" data-act="cancelar-tit">Cancelar</button></div></form>`
+  :`<div class="row" style="align-items:flex-start"><div class="grow"><h1>${esc(db.ajustes.titulo)}</h1><small style="font-size:15px">${esc(db.ajustes.subtitulo)}</small></div><button class="back" style="font-size:16px" data-act="editar-tit" aria-label="Cambiar el nombre del curso"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></button></div>`;
+  H.innerHTML=`${tit}${st}
+  <div class="stats"><div class="stat"><b>${db.alumnos.length}</b><span>Alumnos</span></div><div class="stat"><b>${prom}%</b><span>Asistencia</span></div><div class="stat"><b>${dados()}/${db.temas.length}</b><span>Temas dados</span></div></div>`;
+}
+
+function vAlumnos(){
+  let al=db.alumnos.map(a=>({a,s:stats(a)}));
+  if(filtro==='pend')al=al.filter(x=>x.s.pend.length);
+  if(filtro==='faltas')al=al.filter(x=>x.s.faltas>=3);
+  const chips=[['todos','Todos'],['pend','Con temas pendientes'],['faltas','3+ faltas']].map(([k,t])=>`<button class="chip ${filtro===k?'on':''}" data-filtro="${k}">${t}</button>`).join('');
+  const N=db.temas.length||1;
+  const cards=al.map(({a,s})=>{
+    const falta=s.pend.length?`Le falta: ${s.pend.length===1?'Tema '+nTema(s.pend[0])+' · '+esc(tema(s.pend[0]).nombre):'Temas '+s.pend.map(nTema).join(', ')}`:'';
+    const tag=s.faltas===0?'<span class="tag ok">0 faltas</span>':`<span class="tag ${s.faltas>=3?'hot':''}">${s.faltas} falta${s.faltas>1?'s':''}</span>`;
+    return `<button class="card" data-alumno="${esc(a.id)}"><div class="row"><div class="av">${esc(ini(a.nombre))}</div>
+    <div class="grow"><span class="name">${esc(a.nombre)}</span>${falta?`<span class="sub">${falta}</span>`:`<span class="sub ok">${s.total?'Al día con todos los temas':'Aún sin clases'}</span>`}</div>${tag}</div>
+    <div class="row"><div class="bar"><i style="width:${s.comp/N*100}%"></i></div><span class="num">${s.comp}/${db.temas.length} temas · ${s.pct}%</span></div></button>`}).join('');
+  return `<div class="chips">${chips}</div>
+  <form class="form" id="f-alumno"><label for="n-alumno" class="oculto">Nombre del alumno</label><input id="n-alumno" placeholder="Nombre del nuevo alumno" autocomplete="off"><button class="btn">Añadir</button></form>
+  ${cards||'<div class="empty">No hay alumnos aquí todavía.</div>'}
+  ${modo==='local'&&db.ejemplo?'<p class="note">Datos de ejemplo. <button class="btn ghost sm" style="background:none;color:var(--acc)" data-act="limpiar">Empezar en blanco</button></p>':''}`;
+}
+
+function vDetalle(){
+  const a=db.alumnos.find(x=>x.id===detalle),s=stats(a),rec=a.recuperados||[];
+  const sesPor=Object.fromEntries(db.sesiones.map(x=>[x.temaId,x]));
+  let proximo=true;
+  const dl=`<datalist id="dl-prof">${profesores().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>`;
+  const items=db.temas.map((t,i)=>{
+    const ses=sesPor[t.id],r=rec.find(x=>x.temaId===t.id);let dot,txt,cls='',extra='',form='';
+    if(ses&&a.id in (ses.asis||{})){
+      if(ses.asis[a.id]){dot='<div class="dot ok">✓</div>';txt=`Completado · ${porQuien(ses.fecha,ses.profesor)}`}
+      else if(r){dot='<div class="dot ok">✓</div>';txt=`Recuperado${r.fecha||r.profesor?' · '+porQuien(r.fecha,r.profesor):''}`}
+      else{dot='<div class="dot no">✕</div>';txt=`Faltó el ${fmt(ses.fecha)} · pendiente`;cls='pend';
+        if(recup===t.id)form=`<form class="li pend" id="f-recup" style="flex-direction:column;align-items:stretch;gap:8px"><label for="r-prof" class="sub">¿Quién le dio la clase de recuperación?</label><input id="r-prof" list="dl-prof" placeholder="Ej. Hna. Carmen" autocomplete="off"><input type="date" id="r-fecha" value="${hoy()}" aria-label="Fecha de recuperación"><div class="row"><button class="btn" style="flex:1">Guardar</button><button type="button" class="btn ghost" data-act="cancelar">Cancelar</button></div></form>`;
+        else extra=`<button class="btn sm" data-recuperar="${esc(t.id)}">Recuperar</button>`}
+    }else if(ses){dot='<div class="dot later"></div>';txt='Dado antes de que se inscribiera'}
+    else if(proximo){proximo=false;dot='<div class="dot next"></div>';txt='Próxima clase'}
+    else{dot='<div class="dot later"></div>';txt='Por venir'}
+    return `<div class="li ${cls}">${dot}<div class="grow"><span style="font-size:14px;font-weight:${cls?600:500}">${i+1} · ${esc(t.nombre)}</span><span class="sub" style="font-size:12px;${cls?'color:var(--bad)':''}">${txt}</span></div>${extra}</div>${form}`}).join('')+dl;
+  const alerta=s.pend.length?`<div class="alert"><b>Tiene ${s.pend.length} tema${s.pend.length>1?'s':''} por recuperar</b>${s.pend.map(id=>'Tema '+nTema(id)+' · '+esc(tema(id).nombre)).join('<br>')}</div>`:'';
+  return `${alerta}<div class="row" style="justify-content:space-between"><h2>Temas del curso</h2><span class="num">${s.comp} de ${db.temas.length}</span></div>
+  <div class="bar" style="flex:none"><i style="width:${s.comp/(db.temas.length||1)*100}%"></i></div><div class="list">${items}</div>
+  <button class="btn ghost" data-borrar="${esc(a.id)}">Quitar alumno</button>`;
+}
+
+function vLista(){
+  if(!db.temas.length)return '<div class="empty">Primero añade los temas en la pestaña Temas.</div>';
+  if(!db.alumnos.length)return '<div class="empty">Primero añade alumnos.</div>';
+  const usados=new Set(db.sesiones.map(s=>s.temaId));
+  if(!lista||!tema(lista.temaId)){const t=db.temas.find(t=>!usados.has(t.id))||db.temas[0];lista={temaId:t.id,fecha:hoy(),profesor:'',asis:{}}}
+  db.alumnos.forEach(a=>{if(!(a.id in lista.asis))lista.asis[a.id]=true});
+  const subs=tema(lista.temaId).subs||[];
+  const opts=db.temas.map((t,i)=>`<option value="${esc(t.id)}" ${t.id===lista.temaId?'selected':''}>${i+1} · ${esc(t.nombre)}${usados.has(t.id)?' (ya dado)':''}</option>`).join('');
+  const pres=db.alumnos.filter(a=>lista.asis[a.id]).length;
+  const rows=db.alumnos.map(a=>`<div class="li"><div class="av">${esc(ini(a.nombre))}</div><div class="grow"><span class="name">${esc(a.nombre)}</span></div>
+  <div class="toggle"><button class="p ${lista.asis[a.id]?'on':''}" data-marca="${esc(a.id)}" data-v="1" aria-label="Presente">P</button><button class="f ${lista.asis[a.id]?'':'on'}" data-marca="${esc(a.id)}" data-v="0" aria-label="Falta">F</button></div></div>`).join('');
+  return `<label for="s-tema" class="sub">Tema de hoy</label><select id="s-tema">${opts}</select>
+  ${subs.length?`<div class="sub" style="background:var(--card);border-radius:12px;padding:10px 14px">Subtemas: ${subs.map(esc).join(' · ')}</div>`:''}
+  <label for="s-prof" class="sub">Hermano o hermana que da la clase</label><input id="s-prof" list="dl-prof2" placeholder="Ej. Hno. Luis" value="${esc(lista.profesor)}" autocomplete="off">
+  <datalist id="dl-prof2">${profesores().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+  <label for="s-fecha" class="sub">Fecha</label><input type="date" id="s-fecha" value="${esc(lista.fecha)}">
+  <div class="row" style="justify-content:space-between;margin-top:6px"><h2>Alumnos</h2><span class="num">${pres} presentes · ${db.alumnos.length-pres} faltas</span></div>
+  <div class="list">${rows}</div><button class="btn" data-act="guardar">Guardar asistencia</button>`;
+}
+
+function vTemas(){
+  const sesPor=Object.fromEntries(db.sesiones.map(x=>[x.temaId,x]));
+  const items=db.temas.map((t,i)=>{const s=sesPor[t.id];const p=s?Object.values(s.asis||{}).filter(Boolean).length:0,n=s?Object.keys(s.asis||{}).length:0;
+    const open=abierto===t.id,ts=t.subs||[];
+    const subs=open?`<div style="padding:0 14px 14px 54px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)">
+      ${ts.map((x,k)=>`<div class="row" style="gap:8px"><span style="flex:1;font-size:14px">• ${esc(x)}</span><button class="btn ghost sm" style="background:none;color:var(--mute);min-width:44px" data-delsub="${k}" aria-label="Quitar subtema">✕</button></div>`).join('')||'<span class="sub">Sin subtemas todavía.</span>'}
+      <form class="form" id="f-sub"><input id="n-sub" placeholder="Nuevo subtema" aria-label="Nuevo subtema" autocomplete="off"><button class="btn sm">Añadir</button></form></div>`:'';
+    return `<div class="li" style="${open?'border-bottom:0':''}">${s?'<div class="dot ok">✓</div>':'<div class="dot later"></div>'}<div class="grow"><span style="font-size:14px;font-weight:500">${i+1} · ${esc(t.nombre)}</span><span class="sub" style="font-size:12px">${s?`Dado el ${porQuien(s.fecha,s.profesor)} · ${p} de ${n} presentes`:'Aún no se ha dado'}</span></div>
+    <button class="btn ghost sm" style="background:none;color:var(--acc);white-space:nowrap" data-abrir="${esc(t.id)}" aria-expanded="${open}">${ts.length} subtema${ts.length===1?'':'s'} ${open?'▴':'▾'}</button></div>${subs}`}).join('');
+  return `<form class="form" id="f-tema"><label for="n-tema" class="oculto">Nombre del tema</label><input id="n-tema" placeholder="Nuevo tema" autocomplete="off"><button class="btn">Añadir</button></form>
+  <div class="list">${items||'<div class="empty">Sin temas todavía.<br><br><button class="btn" data-act="base">Cargar los 12 temas base</button></div>'}</div>`;
+}
+
+function render(){
+  if(!listo)return;
+  const f=document.activeElement,fid=f&&f.id,sel=f&&f.selectionStart;
+  header();
+  document.getElementById('main').innerHTML=detalle?vDetalle():tab==='alumnos'?vAlumnos():tab==='lista'?vLista():vTemas();
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',!detalle&&b.dataset.tab===tab));
+  for(const id in draft){const el=document.getElementById(id);if(el)el.value=draft[id]}
+  if(fid){const el=document.getElementById(fid);if(el){el.focus();try{el.setSelectionRange(sel,sel)}catch(e){}}}
+}
+const clear=(...ids)=>ids.forEach(i=>delete draft[i]);
+
+document.addEventListener('input',e=>{if(e.target.id&&e.target.matches('input'))draft[e.target.id]=e.target.value;if(e.target.id==='s-prof'&&lista)lista.profesor=e.target.value});
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  const d=b.dataset;
+  if(d.tab){tab=d.tab;detalle=null;recup=null;render();scrollTo(0,0);return}
+  if(d.filtro){filtro=d.filtro;render();return}
+  if(d.alumno){detalle=d.alumno;render();scrollTo(0,0);return}
+  if(d.act==='volver'){detalle=null;recup=null;render();return}
+  if(d.act==='editar-tit'){editTit=true;clear('i-tit','i-sub');render();document.getElementById('i-tit').focus();return}
+  if(d.act==='cancelar-tit'){editTit=false;clear('i-tit','i-sub');render();return}
+  if(d.recuperar){recup=d.recuperar;clear('r-prof');render();const i=document.getElementById('r-prof');if(i)i.focus();return}
+  if(d.act==='cancelar'){recup=null;render();return}
+  if(d.abrir){abierto=abierto===d.abrir?null:d.abrir;render();return}
+  if(d.delsub){S.delSub(abierto,tema(abierto).subs[+d.delsub]);return}
+  if(d.act==='base'){S.temasBase();toast('Temas cargados');return}
+  if(d.borrar){if(b.dataset.ok){S.delAlumno(d.borrar);detalle=null;render();toast('Alumno quitado')}else{b.dataset.ok=1;b.textContent='Toca otra vez para confirmar'}return}
+  if(d.marca){lista.asis[d.marca]=d.v==='1';render();return}
+  if(d.act==='guardar'){
+    lista.profesor=document.getElementById('s-prof').value.trim();
+    if(!lista.profesor){toast('Escribe quién da la clase');document.getElementById('s-prof').focus();return}
+    lista.fecha=document.getElementById('s-fecha').value||hoy();
+    S.sesion(lista);lista=null;clear('s-prof','s-fecha');tab='alumnos';render();toast('Asistencia guardada');return}
+  if(d.act==='limpiar'){if(b.dataset.ok){S.limpiar();toast('Listo, empieza añadiendo alumnos')}else{b.dataset.ok=1;b.textContent='¿Seguro? Toca otra vez'}return}
+});
+document.addEventListener('change',e=>{
+  if(e.target.id==='s-tema'){lista.temaId=e.target.value;const ex=db.sesiones.find(s=>s.temaId===lista.temaId);
+    if(ex){lista.fecha=ex.fecha;lista.profesor=ex.profesor||lista.profesor;lista.asis={...ex.asis}}else lista.asis={};
+    clear('s-prof','s-fecha');render()}
+  if(e.target.id==='s-fecha')lista.fecha=e.target.value;
+});
+document.addEventListener('submit',e=>{
+  e.preventDefault();const v=id=>document.getElementById(id).value.trim();
+  if(e.target.id==='f-tit'){const t=v('i-tit'),s=v('i-sub');if(!t)return;editTit=false;clear('i-tit','i-sub');S.ajustes({titulo:t,subtitulo:s});render();toast('Nombre del curso actualizado')}
+  if(e.target.id==='f-alumno'){const n=v('n-alumno');if(!n)return;clear('n-alumno');S.addAlumno(n);render();toast('Alumno añadido')}
+  if(e.target.id==='f-recup'){const p=v('r-prof');if(!p){toast('Escribe quién dio la clase');return}
+    S.recup(detalle,{temaId:recup,fecha:document.getElementById('r-fecha').value,profesor:p});recup=null;clear('r-prof');render();toast('Tema marcado como recuperado')}
+  if(e.target.id==='f-sub'){const s=v('n-sub');if(!s)return;clear('n-sub');S.addSub(abierto,s);render();const i=document.getElementById('n-sub');if(i){i.value='';i.focus()}}
+  if(e.target.id==='f-tema'){const n=v('n-tema');if(!n)return;clear('n-tema');S.addTema(n);render();toast('Tema añadido')}
+});
+listo=true;render();
+
+/* instalar como app (PWA) */
+if('serviceWorker' in navigator&&location.protocol==='https:'&&!location.hostname.endsWith('claude.ai')){
+  try{navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
+}
+}
+</script>
+</body>
+</html>
