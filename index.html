@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Discipulado">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -141,16 +142,23 @@ if(nube){
   try{
     firebase.initializeApp(firebaseConfig);
     fs=firebase.firestore();
+    try{fs.settings({experimentalAutoDetectLongPolling:true,merge:true})}catch(e){}
     try{fs.enablePersistence({synchronizeTabs:true}).catch(()=>{})}catch(e){}
     ref=fs.collection('doctrina').doc(CURSO);
     modo='nube';estado='Conectando…';
-    const ok=()=>{estado=navigator.onLine?'En la nube':'Sin internet · se sincroniza al volver'};
-    const err=e=>{estado='Error de conexión: '+(e.code||e.message);render()};
+    let conectado=false;
+    const ok=()=>{conectado=true;estado=navigator.onLine?'En la nube':'Sin internet · se sincroniza al volver'};
+    const err=e=>{conectado=true;estado='Error de conexión: '+(e.code||e.message);render()};
+    setTimeout(()=>{if(!conectado){estado='La nube no responde. Revisa internet o las reglas de Firestore';render()}},15000);
+    const escuchar=()=>{
     ref.onSnapshot(d=>{db.ajustes={...AJ,...(d.data()||{})};ok();render()},err);
     ref.collection('temas').orderBy('orden').onSnapshot(q=>{db.temas=q.docs.map(d=>({subs:[],...d.data(),id:d.id}));ok();render()},err);
     ref.collection('alumnos').orderBy('nombre').onSnapshot(q=>{db.alumnos=q.docs.map(d=>({recuperados:[],...d.data(),id:d.id}));ok();render()},err);
     ref.collection('sesiones').onSnapshot(q=>{db.sesiones=q.docs.map(d=>({asis:{},...d.data(),id:d.id}));ok();render()},err);
-    addEventListener('online',()=>{ok();render()});addEventListener('offline',()=>{ok();render()});
+    };
+    const auth=firebase.auth&&firebase.auth();
+    if(auth){auth.onAuthStateChanged(u=>{if(u&&!escuchar.ya){escuchar.ya=1;escuchar()}});auth.signInAnonymously().catch(e=>{console.warn(e);if(!escuchar.ya){escuchar.ya=1;escuchar()}})}else escuchar();
+    addEventListener('online',()=>{if(conectado)ok();render()});addEventListener('offline',()=>{if(conectado)ok();render()});
   }catch(e){modo='local';console.error(e)}
 }
 if(modo==='local'){
