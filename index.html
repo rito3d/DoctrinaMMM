@@ -52,7 +52,8 @@ main{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}.li:last-child{border:0}
 .li.pend{background:light-dark(#FFF7F1,#2a1d14)}
 .dot{width:28px;height:28px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:700}
-.dot.ok{background:#1F6B3A}.dot.no{background:#B4410B}.dot.next{border:2px solid var(--acc)}.dot.later{border:2px solid var(--line)}
+.dot.ok{background:#1F6B3A}.dot.no{background:#B4410B}.dot.next{border:2px solid var(--acc)}.dot.later{border:2px solid var(--line)}.dot.half{border:2px solid #1F6B3A;background:linear-gradient(90deg,#1F6B3A 50%,transparent 50%)}
+.li.subli{padding:8px 14px 8px 54px;gap:10px}.dot.sm{width:20px;height:20px;font-size:11px}
 .btn{min-height:44px;padding:0 16px;border-radius:12px;border:0;background:var(--acc);color:#fff;font:600 15px Inter,sans-serif;cursor:pointer}
 .btn.sm{min-height:36px;padding:0 12px;font-size:13px;background:var(--head)}
 .btn.ghost{background:transparent;color:var(--acc);border:1px solid var(--line)}
@@ -93,7 +94,7 @@ header{padding-top:max(22px,env(safe-area-inset-top))}
 <div class="toast" id="toast"></div>
 <script>
 /* Diagnóstico: muestra en pantalla la versión y cualquier error */
-window.APP_VERSION='v9';
+window.APP_VERSION='v10';
 (function(){
   function bar(msg){var b=document.getElementById('diag');if(!b){b=document.createElement('div');b.id='diag';b.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#b42318;color:#fff;padding:10px 12px;border-radius:10px;font:13px/1.35 system-ui,sans-serif;white-space:pre-wrap';document.body.appendChild(b)}b.textContent=(b.textContent?b.textContent+'\n':'')+'Error: '+msg}
   window.addEventListener('error',function(e){bar((e.message||'')+(e.filename?' ('+e.filename.split('/').pop()+':'+e.lineno+')':''))});
@@ -206,9 +207,9 @@ const S={
   addAlumno(nombre){if(ref)return ref.collection('alumnos').add({nombre,recuperados:[]}).catch(fallo);db.alumnos.push({id:uid(),nombre,recuperados:[]});delete db.ejemplo;saveLocal();render()},
   renAlumno(id,nombre){if(ref)return ref.collection('alumnos').doc(id).update({nombre}).catch(fallo);db.alumnos.find(a=>a.id===id).nombre=nombre;saveLocal();render()},
   delAlumno(id){if(ref)return ref.collection('alumnos').doc(id).delete().catch(fallo);db.alumnos=db.alumnos.filter(a=>a.id!==id);saveLocal();render()},
-  sesion(s){const data={temaId:s.temaId,fecha:s.fecha,profesor:s.profesor,asis:s.asis};
-    if(ref)return ref.collection('sesiones').doc(s.temaId).set(data,{merge:true}).catch(fallo);
-    const ex=db.sesiones.find(x=>x.temaId===s.temaId);if(ex){Object.assign(ex,{...data,asis:{...ex.asis,...s.asis}})}else db.sesiones.push({id:s.temaId,...data});saveLocal();render()},
+  sesion(s){const sub=s.sub??null,id=s.exId||sid(s.temaId,sub);const data={temaId:s.temaId,sub,fecha:s.fecha,profesor:s.profesor,asis:s.asis};
+    if(ref)return ref.collection('sesiones').doc(id).set(data,{merge:true}).catch(fallo);
+    const ex=db.sesiones.find(x=>x.id===id);if(ex){Object.assign(ex,{...data,asis:{...ex.asis,...s.asis}})}else db.sesiones.push({id,...data});saveLocal();render()},
   recup(aid,r){if(ref)return ref.collection('alumnos').doc(aid).update({recuperados:FV().arrayUnion(r)}).catch(fallo);db.alumnos.find(a=>a.id===aid).recuperados.push(r);saveLocal();render()},
   temasBase(){if(ref){const b=fs.batch();TEMAS_BASE.forEach((n,i)=>b.set(ref.collection('temas').doc(),{nombre:n,subs:[],orden:i}));return b.commit().catch(fallo)}
     TEMAS_BASE.forEach((n,i)=>db.temas.push({id:uid(),nombre:n,subs:[],orden:i}));saveLocal();render()},
@@ -219,16 +220,36 @@ const S={
 const tema=id=>db.temas.find(t=>t.id===id);
 const nTema=id=>db.temas.indexOf(tema(id))+1;
 const ini=n=>String(n).split(/\s+/).map(p=>p[0]||'').slice(0,2).join('').toUpperCase();
-const dados=()=>db.sesiones.filter(s=>tema(s.temaId)).length;
+/* Cada tema se da por subtemas, una clase por semana. Un tema sin subtemas es una sola clase.
+   Las clases guardadas antes de la v10 (sin subtema) cuentan como la del primer subtema. */
+const unidades=t=>(t.subs&&t.subs.length)?t.subs:[null];
+const subDe=(tid,x)=>{if(x==='*')return '*';if(x)return x;const t=tema(tid);return t&&t.subs&&t.subs.length?t.subs[0]:null};
+const efSub=s=>subDe(s.temaId,s.sub);
+const valida=s=>{const t=tema(s.temaId);if(!t)return false;const e=efSub(s);return e==='*'||unidades(t).includes(e)};
+const sesUni=(t,u)=>{const ss=db.sesiones.filter(s=>s.temaId===t.id&&valida(s));return ss.find(s=>efSub(s)===u)||ss.find(s=>efSub(s)==='*')};
+const temaDado=t=>unidades(t).every(u=>sesUni(t,u));
+const temaEmpezado=t=>unidades(t).some(u=>sesUni(t,u));
+const sigSub=t=>{const u=unidades(t).find(u=>!sesUni(t,u));return u===undefined?unidades(t)[0]:u};
+const sid=(tid,u)=>u?tid+'~'+encodeURIComponent(u).replace(/\./g,'%2E'):tid;
+const dados=()=>db.temas.filter(temaDado).length;
+function estUni(a,t,u){
+  const s=sesUni(t,u);if(!s)return {e:'nodado'};
+  if(!(a.id in (s.asis||{})))return {e:'antes',s};
+  if(s.asis[a.id])return {e:'ok',s};
+  const r=(a.recuperados||[]).find(r=>{if(r.temaId!==t.id)return false;const x=subDe(t.id,r.sub);return x===u||x==='*'});
+  return r?{e:'rec',s,r}:{e:'falta',s};
+}
+const nomPend=p=>'Tema '+nTema(p.temaId)+' · '+esc(p.sub||tema(p.temaId).nombre);
 const profesores=()=>[...new Set([...db.sesiones.map(s=>s.profesor),...db.alumnos.flatMap(a=>a.recuperados||[]).map(r=>r.profesor)].filter(Boolean))];
 const porQuien=(f,p)=>[fmt(f),p?'Prof. '+esc(p):''].filter(Boolean).join(' · ');
 function stats(a){
-  const ses=db.sesiones.filter(s=>tema(s.temaId)&&a.id in (s.asis||{}));
+  const ses=db.sesiones.filter(s=>valida(s)&&a.id in (s.asis||{}));
   const pres=ses.filter(s=>s.asis[a.id]).length;
-  const rec=(a.recuperados||[]).map(r=>r.temaId);
-  const pend=ses.filter(s=>!s.asis[a.id]&&!rec.includes(s.temaId)).map(s=>s.temaId);
-  const comp=new Set([...ses.filter(s=>s.asis[a.id]).map(s=>s.temaId),...rec.filter(tema)]);
-  return {total:ses.length,pres,faltas:ses.length-pres,pct:ses.length?Math.round(pres/ses.length*100):0,pend,comp:comp.size};
+  const pend=[];let comp=0;
+  db.temas.forEach(t=>{const us=unidades(t).map(u=>({u,...estUni(a,t,u)}));
+    us.filter(x=>x.e==='falta').forEach(x=>pend.push({temaId:t.id,sub:x.u}));
+    if(us.every(x=>x.e==='ok'||x.e==='rec'))comp++});
+  return {total:ses.length,pres,faltas:ses.length-pres,pct:ses.length?Math.round(pres/ses.length*100):0,pend,comp};
 }
 function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(()=>el.classList.remove('show'),2200)}
 
@@ -260,7 +281,7 @@ function vAlumnos(){
   const chips=[['todos','Todos'],['pend','Con temas pendientes'],['faltas','3+ faltas']].map(([k,t])=>`<button class="chip ${filtro===k?'on':''}" data-filtro="${k}">${t}</button>`).join('');
   const N=db.temas.length||1;
   const cards=al.map(({a,s})=>{
-    const falta=s.pend.length?`Le falta: ${s.pend.length===1?'Tema '+nTema(s.pend[0])+' · '+esc(tema(s.pend[0]).nombre):'Temas '+s.pend.map(nTema).join(', ')}`:'';
+    const falta=s.pend.length?`Le falta recuperar: ${s.pend.length===1?nomPend(s.pend[0]):s.pend.length+' clases (tema '+[...new Set(s.pend.map(p=>nTema(p.temaId)))].join(', ')+')'}`:'';
     const tag=s.faltas===0?'<span class="tag ok">0 faltas</span>':`<span class="tag ${s.faltas>=3?'hot':''}">${s.faltas} falta${s.faltas>1?'s':''}</span>`;
     return `<button class="card" data-alumno="${esc(a.id)}"><div class="row"><div class="av">${esc(ini(a.nombre))}</div>
     <div class="grow"><span class="name">${esc(a.nombre)}</span>${falta?`<span class="sub">${falta}</span>`:`<span class="sub ok">${s.total?'Al día con todos los temas':'Aún sin clases'}</span>`}</div>${tag}</div>
@@ -272,23 +293,37 @@ function vAlumnos(){
 }
 
 function vDetalle(){
-  const a=db.alumnos.find(x=>x.id===detalle),s=stats(a),rec=a.recuperados||[];
-  const sesPor=Object.fromEntries(db.sesiones.map(x=>[x.temaId,x]));
+  const a=db.alumnos.find(x=>x.id===detalle),s=stats(a);
   let proximo=true;
   const dl=`<datalist id="dl-prof">${profesores().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>`;
+  const fRec=`<form class="li pend" id="f-recup" style="flex-direction:column;align-items:stretch;gap:8px"><label for="r-prof" class="sub">¿Quién le dio la clase de recuperación?</label><input id="r-prof" list="dl-prof" placeholder="Ej. Hna. Carmen" autocomplete="off"><input type="date" id="r-fecha" value="${hoy()}" aria-label="Fecha de recuperación"><div class="row"><button class="btn" style="flex:1">Guardar</button><button type="button" class="btn ghost" data-act="cancelar">Cancelar</button></div></form>`;
+  /* estado de una clase (tema sin subtemas o un subtema) */
+  const clase=(t,x,k)=>{let dot,txt,cls='',extra='',form='';const key=t.id+'|'+k;
+    if(x.e==='ok'){dot='ok';txt=`Completado · ${porQuien(x.s.fecha,x.s.profesor)}`}
+    else if(x.e==='rec'){dot='ok';txt=`Recuperado${x.r.fecha||x.r.profesor?' · '+porQuien(x.r.fecha,x.r.profesor):''}`}
+    else if(x.e==='falta'){dot='no';txt=`Faltó el ${fmt(x.s.fecha)} · pendiente`;cls='pend';
+      if(recup===key)form=fRec;else extra=`<button class="btn sm" data-recuperar="${esc(key)}">Recuperar</button>`}
+    else if(x.e==='antes'){dot='later';txt='Dado antes de que se inscribiera'}
+    else if(proximo){proximo=false;dot='next';txt='Próxima clase'}
+    else{dot='later';txt='Por venir'}
+    return {dot,txt,cls,extra,form}};
   const items=db.temas.map((t,i)=>{
-    const ses=sesPor[t.id],r=rec.find(x=>x.temaId===t.id);let dot,txt,cls='',extra='',form='';
-    if(ses&&a.id in (ses.asis||{})){
-      if(ses.asis[a.id]){dot='<div class="dot ok">✓</div>';txt=`Completado · ${porQuien(ses.fecha,ses.profesor)}`}
-      else if(r){dot='<div class="dot ok">✓</div>';txt=`Recuperado${r.fecha||r.profesor?' · '+porQuien(r.fecha,r.profesor):''}`}
-      else{dot='<div class="dot no">✕</div>';txt=`Faltó el ${fmt(ses.fecha)} · pendiente`;cls='pend';
-        if(recup===t.id)form=`<form class="li pend" id="f-recup" style="flex-direction:column;align-items:stretch;gap:8px"><label for="r-prof" class="sub">¿Quién le dio la clase de recuperación?</label><input id="r-prof" list="dl-prof" placeholder="Ej. Hna. Carmen" autocomplete="off"><input type="date" id="r-fecha" value="${hoy()}" aria-label="Fecha de recuperación"><div class="row"><button class="btn" style="flex:1">Guardar</button><button type="button" class="btn ghost" data-act="cancelar">Cancelar</button></div></form>`;
-        else extra=`<button class="btn sm" data-recuperar="${esc(t.id)}">Recuperar</button>`}
-    }else if(ses){dot='<div class="dot later"></div>';txt='Dado antes de que se inscribiera'}
-    else if(proximo){proximo=false;dot='<div class="dot next"></div>';txt='Próxima clase'}
-    else{dot='<div class="dot later"></div>';txt='Por venir'}
-    return `<div class="li ${cls}">${dot}<div class="grow"><span style="font-size:14px;font-weight:${cls?600:500}">${i+1} · ${esc(t.nombre)}</span><span class="sub" style="font-size:12px;${cls?'color:var(--bad)':''}">${txt}</span></div>${extra}</div>${form}`}).join('')+dl;
-  const alerta=s.pend.length?`<div class="alert"><b>Tiene ${s.pend.length} tema${s.pend.length>1?'s':''} por recuperar</b>${s.pend.map(id=>'Tema '+nTema(id)+' · '+esc(tema(id).nombre)).join('<br>')}</div>`:'';
+    const us=unidades(t).map(u=>({u,...estUni(a,t,u)})),tit=`${i+1} · ${esc(t.nombre)}`;
+    if(us[0].u===null){const c=clase(t,us[0],-1);
+      return `<div class="li ${c.cls}"><div class="dot ${c.dot}">${c.dot==='ok'?'✓':c.dot==='no'?'✕':''}</div><div class="grow"><span style="font-size:14px;font-weight:${c.cls?600:500}">${tit}</span><span class="sub" style="font-size:12px;${c.cls?'color:var(--bad)':''}">${c.txt}</span></div>${c.extra}</div>${c.form}`}
+    const N=us.length,hechos=us.filter(x=>x.e==='ok'||x.e==='rec').length,falt=us.filter(x=>x.e==='falta').length,dadas=us.filter(x=>x.e!=='nodado').length;
+    let dot,txt,cls='',filas='';
+    if(hechos===N){dot='<div class="dot ok">✓</div>';txt=`Completado · ${N} de ${N} subtemas`}
+    else if(dadas===0){const sig=us[0].u;
+      if(proximo){proximo=false;dot='<div class="dot next"></div>';txt='Próxima clase · '+esc(sig)}else{dot='<div class="dot later"></div>';txt=`Por venir · ${N} subtemas`}}
+    else{
+      if(falt){dot='<div class="dot no">✕</div>';cls='pend';txt=`${hechos} de ${N} subtemas · ${falt} por recuperar`}
+      else if(hechos===0&&dadas===N){dot='<div class="dot later"></div>';txt='Dado antes de que se inscribiera'}
+      else{dot='<div class="dot half"></div>';txt=`En curso · ${hechos} de ${N} subtemas`}
+      filas=us.map((x,k)=>{const c=clase(t,x,k);
+        return `<div class="li subli ${c.cls}"><div class="dot sm ${c.dot}">${c.dot==='ok'?'✓':c.dot==='no'?'✕':''}</div><div class="grow"><span style="font-size:13px;font-weight:500">${esc(x.u)}</span><span class="sub" style="font-size:12px;${c.cls?'color:var(--bad)':''}">${c.txt}</span></div>${c.extra}</div>${c.form}`}).join('')}
+    return `<div class="li ${cls}" style="${filas?'border-bottom:0':''}">${dot}<div class="grow"><span style="font-size:14px;font-weight:${cls?600:500}">${tit}</span><span class="sub" style="font-size:12px;${cls?'color:var(--bad)':''}">${txt}</span></div></div>${filas}`}).join('')+dl;
+  const alerta=s.pend.length?`<div class="alert"><b>Tiene ${s.pend.length} clase${s.pend.length>1?'s':''} por recuperar</b>${s.pend.map(nomPend).join('<br>')}</div>`:'';
   return `${alerta}<div class="row" style="justify-content:space-between"><h2>Temas del curso</h2><span class="num">${s.comp} de ${db.temas.length}</span></div>
   <div class="bar" style="flex:none"><i style="width:${s.comp/(db.temas.length||1)*100}%"></i></div><div class="list">${items}</div>
   <h2 style="margin-top:8px">Datos del alumno</h2>
@@ -297,19 +332,23 @@ function vDetalle(){
   <button class="btn ghost" data-borrar="${esc(a.id)}">🗑 Quitar alumno (ya no asiste)</button>`;
 }
 
+function cargarLista(){const ex=db.sesiones.find(s=>s.temaId===lista.temaId&&valida(s)&&efSub(s)===subDe(lista.temaId,lista.sub));
+  if(ex){lista.exId=ex.id;lista.fecha=ex.fecha;lista.profesor=ex.profesor||lista.profesor;lista.asis={...ex.asis}}else{lista.exId=null;lista.asis={}}}
 function vLista(){
   if(!db.temas.length)return '<div class="empty">Primero añade los temas en la pestaña Temas.</div>';
   if(!db.alumnos.length)return '<div class="empty">Primero añade alumnos.</div>';
-  const usados=new Set(db.sesiones.map(s=>s.temaId));
-  if(!lista||!tema(lista.temaId)){const t=db.temas.find(t=>!usados.has(t.id))||db.temas[0];lista={temaId:t.id,fecha:hoy(),profesor:'',asis:{}}}
+  if(!lista||!tema(lista.temaId)){const t=db.temas.find(t=>!temaDado(t))||db.temas[0];lista={temaId:t.id,sub:sigSub(t),fecha:hoy(),profesor:'',asis:{}};cargarLista()}
+  const t=tema(lista.temaId),ts=t.subs||[];
+  if(ts.length&&lista.sub!=='*'&&!ts.includes(lista.sub)){lista.sub=sigSub(t);cargarLista()}
+  if(!ts.length&&lista.sub){lista.sub=null;cargarLista()}
   db.alumnos.forEach(a=>{if(!(a.id in lista.asis))lista.asis[a.id]=true});
-  const subs=tema(lista.temaId).subs||[];
-  const opts=db.temas.map((t,i)=>`<option value="${esc(t.id)}" ${t.id===lista.temaId?'selected':''}>${i+1} · ${esc(t.nombre)}${usados.has(t.id)?' (ya dado)':''}</option>`).join('');
+  const opts=db.temas.map((x,i)=>`<option value="${esc(x.id)}" ${x.id===lista.temaId?'selected':''}>${i+1} · ${esc(x.nombre)}${temaDado(x)?' (ya dado)':temaEmpezado(x)?' (en curso)':''}</option>`).join('');
+  const sopts=ts.map((x,k)=>`<option value="${k}" ${x===lista.sub?'selected':''}>${k+1}. ${esc(x)}${sesUni(t,x)?' (ya dado)':''}</option>`).join('')+`<option value="*" ${lista.sub==='*'?'selected':''}>Todo el tema en una sola clase</option>`;
   const pres=db.alumnos.filter(a=>lista.asis[a.id]).length;
   const rows=db.alumnos.map(a=>`<div class="li"><div class="av">${esc(ini(a.nombre))}</div><div class="grow"><span class="name">${esc(a.nombre)}</span></div>
   <div class="toggle"><button class="p ${lista.asis[a.id]?'on':''}" data-marca="${esc(a.id)}" data-v="1" aria-label="Presente">P</button><button class="f ${lista.asis[a.id]?'':'on'}" data-marca="${esc(a.id)}" data-v="0" aria-label="Falta">F</button></div></div>`).join('');
-  return `<label for="s-tema" class="sub">Tema de hoy</label><select id="s-tema">${opts}</select>
-  ${subs.length?`<div class="sub" style="background:var(--card);border-radius:12px;padding:10px 14px">Subtemas: ${subs.map(esc).join(' · ')}</div>`:''}
+  return `<label for="s-tema" class="sub">Tema</label><select id="s-tema">${opts}</select>
+  ${ts.length?`<label for="s-sub" class="sub">Subtema de hoy</label><select id="s-sub">${sopts}</select>`:''}
   <label for="s-prof" class="sub">Hermano o hermana que da la clase</label><input id="s-prof" list="dl-prof2" placeholder="Ej. Hno. Luis" value="${esc(lista.profesor)}" autocomplete="off">
   <datalist id="dl-prof2">${profesores().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
   <label for="s-fecha" class="sub">Fecha</label><input type="date" id="s-fecha" value="${esc(lista.fecha)}">
@@ -318,18 +357,21 @@ function vLista(){
 }
 
 function vTemas(){
-  const sesPor=Object.fromEntries(db.sesiones.map(x=>[x.temaId,x]));
-  const items=db.temas.map((t,i)=>{const s=sesPor[t.id];const p=s?Object.values(s.asis||{}).filter(Boolean).length:0,n=s?Object.keys(s.asis||{}).length:0;
-    const open=abierto===t.id,ts=t.subs||[];
+  const items=db.temas.map((t,i)=>{const open=abierto===t.id,ts=t.subs||[];
+    const us=unidades(t),dadas=us.filter(u=>sesUni(t,u)).length,s=sesUni(t,us[0]);
+    const p=s?Object.values(s.asis||{}).filter(Boolean).length:0,n=s?Object.keys(s.asis||{}).length:0;
+    const estado=!ts.length?(s?`Dado el ${porQuien(s.fecha,s.profesor)} · ${p} de ${n} presentes`:'Aún no se ha dado')
+      :dadas===us.length?`Completo · ${dadas} de ${us.length} subtemas dados`:dadas?`En curso · ${dadas} de ${us.length} subtemas dados`:'Aún no se ha dado';
+    const punto=dadas===us.length?'<div class="dot ok">✓</div>':dadas?'<div class="dot half"></div>':'<div class="dot later"></div>';
     const ult=db.temas.length-1,mv=(k,t,dis)=>`<button class="btn ghost sm" style="flex:1;padding-left:4px;padding-right:4px;${dis?'opacity:.35':''}" data-mover="${k}" ${dis?'disabled':''}>${t}</button>`;
     const edit=open?`<form class="form" id="f-rtema"><label for="e-tema" class="oculto">Nombre del tema</label><input id="e-tema" value="${esc(t.nombre)}" autocomplete="off"><button class="btn sm">Guardar</button></form>
       <span class="sub" style="font-size:12px">Mover este tema (ahora es el ${i+1} de ${ult+1})</span>
       <div class="row" style="gap:6px">${mv('primero','⤒ Primero',i===0)}${mv('subir','↑ Subir',i===0)}${mv('bajar','↓ Bajar',i===ult)}${mv('ultimo','⤓ Último',i===ult)}</div>
       <span class="sub" style="font-size:12px;margin-top:6px">Subtemas</span>`:'';
     const subs=open?`<div style="padding:0 14px 14px 54px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)">
-      ${edit}${ts.map((x,k)=>`<div class="row" style="gap:8px"><span style="flex:1;font-size:14px">• ${esc(x)}</span><button class="btn ghost sm" style="background:none;color:var(--mute);min-width:44px" data-delsub="${k}" aria-label="Quitar subtema">✕</button></div>`).join('')||'<span class="sub">Sin subtemas todavía.</span>'}
+      ${edit}${ts.map((x,k)=>`<div class="row" style="gap:8px"><span style="flex:1;font-size:14px">${(()=>{const q=sesUni(t,x);return q?`<span style="color:#1F6B3A">✓</span> ${esc(x)} <span class="sub" style="font-size:12px;display:inline">· ${fmt(q.fecha)}</span>`:'• '+esc(x)})()}</span><button class="btn ghost sm" style="background:none;color:var(--mute);min-width:44px" data-delsub="${k}" aria-label="Quitar subtema">✕</button></div>`).join('')||'<span class="sub">Sin subtemas todavía.</span>'}
       <form class="form" id="f-sub"><input id="n-sub" placeholder="Nuevo subtema" aria-label="Nuevo subtema" autocomplete="off"><button class="btn sm">Añadir</button></form></div>`:'';
-    return `<div class="li" style="${open?'border-bottom:0':''}">${s?'<div class="dot ok">✓</div>':'<div class="dot later"></div>'}<div class="grow"><span style="font-size:14px;font-weight:500">${i+1} · ${esc(t.nombre)}</span><span class="sub" style="font-size:12px">${s?`Dado el ${porQuien(s.fecha,s.profesor)} · ${p} de ${n} presentes`:'Aún no se ha dado'}</span></div>
+    return `<div class="li" style="${open?'border-bottom:0':''}">${punto}<div class="grow"><span style="font-size:14px;font-weight:500">${i+1} · ${esc(t.nombre)}</span><span class="sub" style="font-size:12px">${estado}</span></div>
     <button class="btn ghost sm" style="background:none;color:var(--acc);white-space:nowrap" data-abrir="${esc(t.id)}" aria-expanded="${open}" aria-label="Editar tema">✏️ ${ts.length} subtema${ts.length===1?'':'s'} ${open?'▴':'▾'}</button></div>${subs}`}).join('');
   return `<form class="form" id="f-tema"><label for="n-tema" class="oculto">Nombre del tema</label><input id="n-tema" placeholder="Nuevo tema" autocomplete="off"><button class="btn">Añadir</button></form>
   <div class="list">${items||'<div class="empty">Sin temas todavía.<br><br><button class="btn" data-act="base">Cargar los 12 temas base</button></div>'}</div>`;
@@ -376,9 +418,8 @@ document.addEventListener('click',e=>{
   if(d.act==='limpiar'){if(b.dataset.ok){S.limpiar();toast('Listo, empieza añadiendo alumnos')}else{b.dataset.ok=1;b.textContent='¿Seguro? Toca otra vez'}return}
 });
 document.addEventListener('change',e=>{
-  if(e.target.id==='s-tema'){lista.temaId=e.target.value;const ex=db.sesiones.find(s=>s.temaId===lista.temaId);
-    if(ex){lista.fecha=ex.fecha;lista.profesor=ex.profesor||lista.profesor;lista.asis={...ex.asis}}else lista.asis={};
-    clear('s-prof','s-fecha');render()}
+  if(e.target.id==='s-tema'){lista.temaId=e.target.value;lista.sub=sigSub(tema(lista.temaId));cargarLista();clear('s-prof','s-fecha');render()}
+  if(e.target.id==='s-sub'){const v=e.target.value;lista.sub=v==='*'?'*':tema(lista.temaId).subs[+v];cargarLista();clear('s-prof','s-fecha');render()}
   if(e.target.id==='s-fecha')lista.fecha=e.target.value;
 });
 document.addEventListener('submit',e=>{
@@ -387,7 +428,8 @@ document.addEventListener('submit',e=>{
   if(e.target.id==='f-nombre'){const n=v('e-nombre');if(!n){toast('Escribe el nombre');return}editNom=false;clear('e-nombre');S.renAlumno(detalle,n);render();toast('Nombre corregido');return}
   if(e.target.id==='f-alumno'){const n=v('n-alumno');if(!n){toast('Primero escribe el nombre del alumno');document.getElementById('n-alumno').focus();return}clear('n-alumno');S.addAlumno(n);render();toast('Alumno añadido')}
   if(e.target.id==='f-recup'){const p=v('r-prof');if(!p){toast('Escribe quién dio la clase');return}
-    S.recup(detalle,{temaId:recup,fecha:document.getElementById('r-fecha').value,profesor:p});recup=null;clear('r-prof');render();toast('Tema marcado como recuperado')}
+    const [rt,rk]=recup.split('|'),r={temaId:rt,fecha:document.getElementById('r-fecha').value,profesor:p};if(+rk>=0)r.sub=tema(rt).subs[+rk];
+    S.recup(detalle,r);recup=null;clear('r-prof');render();toast('Tema marcado como recuperado')}
   if(e.target.id==='f-rtema'){const n=v('e-tema');if(!n){toast('Escribe el nombre del tema');return}clear('e-tema');S.renTema(abierto,n);toast('Nombre del tema actualizado');return}
   if(e.target.id==='f-sub'){const s=v('n-sub');if(!s){toast('Primero escribe el subtema');return}clear('n-sub');S.addSub(abierto,s);render();const i=document.getElementById('n-sub');if(i){i.value='';i.focus()}}
   if(e.target.id==='f-tema'){const n=v('n-tema');if(!n){toast('Primero escribe el nombre del tema');document.getElementById('n-tema').focus();return}clear('n-tema');S.addTema(n);render();toast('Tema añadido')}
